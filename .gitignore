@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+
+# MLFlow & DVC
+/ml/mlruns/
+/ml/data/
+.dvc/
+
+# IDE / Editor files
+.vscode/
+.idea/
+
+# Local data and logs
+*.npz
+*.csv
+*.log
+*.png
+*.pth
