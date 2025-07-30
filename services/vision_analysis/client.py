@@ -40,25 +40,23 @@ def generate_requests(cam: Camera, frame_queue: deque):
         if color_image is None or depth_frame_obj is None:
             continue
 
-        # Add the original color image to a queue to be displayed later
-        # This ensures the visualization matches the frame that was analyzed
         frame_queue.append(color_image)
         
-        # Prepare image data for sending
         h, w, _ = color_image.shape
         depth_image = np.asanyarray(depth_frame_obj.get_data())
         depth_h, depth_w = depth_image.shape
 
-        # Encode images to bytes
+        # Encode images to compressed formats before sending.
+        # Use JPEG for the color image (lossy but high compression).
         _, color_bytes = cv2.imencode('.jpg', color_image)
+        # Use PNG for the depth image (lossless to preserve data).
         _, depth_bytes = cv2.imencode('.png', depth_image)
 
-        # Construct the request message
+        # Construct the request message with the compressed bytes.
         yield vision_pb2.AnalysisRequest(
             color_image=vision_pb2.Image(data=color_bytes.tobytes(), width=w, height=h),
             depth_image=vision_pb2.Image(data=depth_bytes.tobytes(), width=depth_w, height=depth_h)
         )
-        # Small delay to prevent overwhelming the network
         cv2.waitKey(1)
 
 def run_client():
@@ -97,10 +95,8 @@ def run_client():
                 # --- Visualize Mask ---
                 if response.mask:
                     mask_buffer = np.frombuffer(response.mask, dtype=np.uint8)
-                    # Decode as grayscale since it's a single-channel mask
                     mask_image = cv2.imdecode(mask_buffer, cv2.IMREAD_GRAYSCALE)
                     if mask_image is not None:
-                        # Create a red overlay for the mask
                         red_overlay = np.zeros_like(display_image)
                         red_overlay[mask_image > 0] = [0, 0, 255] # BGR for red
                         display_image = cv2.addWeighted(display_image, 1.0, red_overlay, 0.5, 0)

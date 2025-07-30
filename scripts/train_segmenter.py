@@ -178,12 +178,14 @@ def train_model():
 
         # --- 5. Log and Register Model ---
         logging.info("Logging best model to MLFlow...")
-        
         model.load_state_dict(torch.load(best_model_path))
-        # Log the PyTorch model
+
+        # An input example to auto-infer the model signature.
+        input_example = next(iter(train_loader))[0].to(DEVICE)
+        
         model_info = mlflow.pytorch.log_model(
             pytorch_model=model,
-            artifact_path="model",
+            name="model",
             registered_model_name=MLFLOW_MODEL_NAME
         )
         
