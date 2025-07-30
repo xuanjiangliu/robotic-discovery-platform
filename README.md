@@ -1,18 +1,20 @@
 # Robotic Discovery Platform: Vision System
 
-Welcome to the official repository for the Robotic Discovery Platform System. The current module provides a complete, autonomous MLOps pipeline for training, deploying, and monitoring a real-time computer vision service designed to analyze the physical properties of soft actuators.
+Welcome to the official repository for the Robotic Discovery Platform System. The **Robotic Discovery Platform** is designed to create a fully integrated system that can independently design, manufacture, and test generations of soft actuators with minimal human intervention. By automating the entire discovery workflow, the platform can explore the design space of soft robotics far more rapidly and efficiently than any manual process, accelerating the pace of innovation.
 
-### System Architecture
+The current module provides a complete, autonomous MLOps pipeline for training, deploying, and monitoring a real-time computer vision service designed to analyze the physical properties of soft actuators.
 
-The platform is built on a **Service-Oriented Architecture (SOA)** and leverages modern MLOps tools to create a robust and automated workflow.
+## 1. System Architecture
 
-* **Internal Communication**: gRPC for high-performance, real-time data streaming.
-* **ML Experiment Tracking**: MLflow for logging experiments, versioning models, and managing the model lifecycle.
+To manage the complexity of this multi-stage process, the platform is built on a **Service-Oriented Architecture (SOA)**. In an SOA, the system is composed of independent, loosely-coupled services that communicate with each other over a network. This design is highly modular, allowing each component (e.g., the vision system, the fabrication system) to be developed, deployed, and scaled independently.
+
+* **gRPC (gRPC Remote Procedure Calls):** All internal communication between services is handled by gRPC. It is a high-performance, open-source RPC framework developed by Google.
+    * **Why gRPC?** It uses Protocol Buffers (`.proto` files) to define a strict contract for communication, ensuring that services can exchange data reliably. Its support for bidirectional streaming is essential for applications like the Vision System, which must process a continuous flow of real-time camera data.
+* **MLflow:** The entire machine learning lifecycle is managed by MLflow. It is used for tracking experiments, packaging code into reproducible runs, and versioning and deploying models. This provides a robust framework for the MLOps (Machine Learning Operations) aspect of the project.
 * **Hardware Interface**: Intel RealSense SDK for 3D camera data.
 
----
 
-## Project Structure
+## 2. Project Structure
 
 The repository is organized into distinct packages and directories, each with a specific responsibility.
 
@@ -54,6 +56,23 @@ robotic-discovery-platform/
 └── workflows/
     └── retraining_pipeline.py          # Automated pipeline to retrain, register, and deploy a new model version.
 ```
+## 3. Deep Dive: The Vision System
+### How It Works:
+
+* **Data Ingestion (`pkg/camera.py`):** The system's entry point is the `Camera` class, which provides a high-level interface to an Intel RealSense 3D camera. To ensure maximum performance and a non-stuttering UI in the client, this module uses a background thread for frame acquisition. This means the main application thread never blocks while waiting for a new frame, allowing it to remain responsive.
+* **Real-Time Segmentation (`pkg/segmentation_model.py`):** Each color frame is preprocessed and fed into a deep learning model for semantic segmentation. The model is a **U-Net**, a convolutional neural network architecture defined in `segmentation_model.py`. It has been trained to identify which pixels in the image belong to the actuator, generating a binary "mask" that isolates the object from the background.
+* **Geometric Analysis (`pkg/geometry_utils.py`):** The `compute_curvature_profile` function in this module takes the segmentation mask and the corresponding high-fidelity depth data to perform the core analysis:
+    * **Point Cloud Generation:** It first generates a dense 3D point cloud of the actuator by projecting the masked depth pixels into 3D space using the camera's intrinsic parameters.
+    * **Edge Detection:** It then applies a binning algorithm to robustly find the top edge of the point cloud, which represents the actuator's primary axis of bending.
+    * **Spline Fitting & Curvature Calculation:** A mathematical B-spline is fitted to these edge points. The derivatives of this spline are then used to calculate its mean and maximum curvature, providing a quantitative measure of the actuator's deformation.
+* **Data Streaming (`services/vision_analysis/server.py`):** The final result—a structured `AnalysisResponse` data object containing the calculated curvature, spline points, and the segmentation mask—is serialized using Protocol Buffers and streamed back to the client over the gRPC connection.
+
+## 4. System Integration & Future Work
+
+The Service-Oriented Architecture is key to the platform's scalability and long-term evolution.
+
+* **Integration via gRPC Contract:** The Vision System operates as a self-contained, black-box service. Other components of the platform, like the Evolutionary Framework, do not need to know the internal details of the vision processing pipeline. They only need to adhere to the gRPC contract defined in `protos/vision.proto`. As long as a client sends an `AnalysisRequest` and is prepared to receive an `AnalysisResponse`, the system will function. This loose coupling makes the entire platform robust and easy to manage.
+* **Future Expansion:** This modular design allows for seamless expansion with new capabilities. For example, the 3D printing service and recycling services can be integrated, and as long as they communicate over the same gRPC interface, the rest of the system will not be affected. Because the services are independent, they can be deployed in a distributed or cloud environment (e.g., as separate Docker containers orchestrated by Kubernetes), allowing the platform to scale to handle more complex discovery tasks.
 
 ---
 
