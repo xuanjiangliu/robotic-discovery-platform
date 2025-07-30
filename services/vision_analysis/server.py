@@ -36,6 +36,7 @@ from pkg.segmentation_model import UNet
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_IMG_SIZE = 256
+DEFAULT_DEPTH_SCALE = 0.001 # Default for Intel RealSense cameras
 
 # --- MLflow and File Paths ---
 MLRUNS_DIR = os.path.join(project_root, "ml", "mlruns")
@@ -46,10 +47,14 @@ CALIB_FILE = os.path.join(project_root, "ml", "configs", "calibration_data.npz")
 
 def _load_resources():
     """
-    Loads the trained model from MLflow and camera calibration data.
+    Loads all necessary resources for the service: the ML model, camera
+    intrinsics, and depth scale.
     """
     model = None
     intrinsics = None
+    depth_scale = None
+
+    # --- Load Model from MLflow ---
     try:
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         model_uri = f"models:/{MLFLOW_MODEL_NAME}/latest"
@@ -58,19 +63,23 @@ def _load_resources():
         logging.info(f"✅ Segmentation model '{MLFLOW_MODEL_NAME}' (latest) loaded from MLflow.")
     except Exception as e:
         logging.error(f"❌ FATAL: Failed to load model from MLflow: {e}")
-        model = None
+        return None, None, None
 
+    # --- Load Calibration Data ---
     if not os.path.exists(CALIB_FILE):
         logging.error(f"❌ FATAL: Calibration data not found at '{CALIB_FILE}'.")
-    else:
-        try:
-            with np.load(CALIB_FILE) as data:
-                intrinsics = data['mtx']
-            logging.info("✅ Camera intrinsics loaded.")
-        except Exception as e:
-            logging.error(f"❌ FATAL: Failed to load intrinsics: {e}")
-            intrinsics = None
-    return model, intrinsics
+        return model, None, None
+    
+    try:
+        with np.load(CALIB_FILE) as data:
+            intrinsics = data['mtx']
+            depth_scale = data.get('depth_scale', DEFAULT_DEPTH_SCALE)
+        logging.info("✅ Camera intrinsics and depth scale loaded.")
+    except Exception as e:
+        logging.error(f"❌ FATAL: Failed to load intrinsics: {e}")
+        return model, None, None
+        
+    return model, intrinsics, depth_scale
 
 class VisionAnalysisService(vision_pb2_grpc.VisionAnalysisServiceServicer):
     """
@@ -90,6 +99,7 @@ class VisionAnalysisService(vision_pb2_grpc.VisionAnalysisServiceServicer):
         logging.info("🤝 Received new request for actuator analysis.")
         try:
             for request in request_iterator:
+                # Decode the compressed image data from the client.
                 color_image = cv2.imdecode(np.frombuffer(request.color_image.data, np.uint8), cv2.IMREAD_COLOR)
                 depth_image = cv2.imdecode(np.frombuffer(request.depth_image.data, np.uint8), cv2.IMREAD_UNCHANGED)
 
@@ -117,7 +127,6 @@ class VisionAnalysisService(vision_pb2_grpc.VisionAnalysisServiceServicer):
                     if hasattr(curvature_results, 'spline_points') and curvature_results.spline_points is not None:
                         response.spline_points.extend([vision_pb2.Point3D(**asdict(p)) for p in curvature_results.spline_points])
 
-                # Use PNG for lossless compression of the mask
                 _, mask_bytes = cv2.imencode('.png', final_mask * 255)
                 response.mask = mask_bytes.tobytes()
                 
@@ -135,13 +144,12 @@ def serve():
     Starts the gRPC server and waits for connections.
     """
     logging.info("🧠 Loading resources for the VisionAnalysisService...")
-    model, intrinsics = _load_resources()
+    model, intrinsics, depth_scale = _load_resources()
 
-    if model is None or intrinsics is None:
-        logging.error("❌ FATAL: Could not load model or calibration data. Shutting down.")
+    if model is None or intrinsics is None or depth_scale is None:
+        logging.error("❌ FATAL: Could not load all required resources. Shutting down.")
         return
-
-    depth_scale = 0.001
+    
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     vision_pb2_grpc.add_VisionAnalysisServiceServicer_to_server(
         VisionAnalysisService(model, intrinsics, depth_scale), server
