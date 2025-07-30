@@ -1,0 +1,41 @@
+// protos/vision.proto
+syntax = "proto3";
+
+package evofab.vision;
+
+// Represents a single 3D point in space.
+message Point3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// Represents a raw image frame.
+message Image {
+  bytes data = 1;
+  int32 width = 2;
+  int32 height = 3;
+}
+
+// A request containing all necessary frames for analysis.
+message AnalysisRequest {
+  Image color_image = 1;
+  Image depth_image = 2;
+}
+
+// The result of the vision analysis.
+message AnalysisResponse {
+  double mean_curvature = 1;
+  double max_curvature = 2;
+  repeated Point3D spline_points = 3;
+  string status = 4;
+  bytes mask = 5;
+  float mask_coverage = 6;
+  float proc_time_ms = 7; //
+}
+
+// The main service definition.
+service VisionAnalysisService {
+  // Analyzes a real-time stream of camera data.
+   rpc AnalyzeActuatorPerformance(stream AnalysisRequest) returns (stream AnalysisResponse);
+}

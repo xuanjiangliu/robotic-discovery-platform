@@ -1,30 +1,62 @@
-# Byte-compiled / optimized / DLL files
+# Python
+# -----------------------------------------------------------------------------
+# Ignore Python cache files, compiled files, and type checker caches.
 __pycache__/
-*.pyc
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
+*.py[cod]
+*.so
+.mypy_cache/
+.pytest_cache/
 
 # Virtual Environments
+# -----------------------------------------------------------------------------
+# Ignore the virtual environment folder. This should never be in version control.
+/venv/
 .env
-.venv
-env/
-venv/
 
-# MLFlow & DVC
-/ml/mlruns/
-/ml/data/
-.dvc/
-
-# IDE / Editor files
+# IDE & Editor Configuration
+# -----------------------------------------------------------------------------
+# Ignore user-specific settings from common editors.
+# Note: It's a team decision whether to commit .vscode/settings.json and
+# launch.json. For solo work or when the team agrees on settings, you can
+# explicitly un-ignore them with `!/.vscode/settings.json`.
 .vscode/
 .idea/
+*.swp
 
-# Local data and logs
+# Build & Distribution Artifacts
+# -----------------------------------------------------------------------------
+# Ignore packaging and distribution folders created by setuptools.
+/build/
+/dist/
+/*.egg-info/
+
+# MLOps & Data Artifacts
+# -----------------------------------------------------------------------------
+# These directories contain large files and logs that are NOT tracked by Git.
+# DVC and MLFlow are responsible for managing the contents of these folders.
+
+# Ignore the DVC local remote storage. The contents are managed by DVC.
+/dvc_storage/
+
+# Ignore MLFlow experiment tracking runs.
+/ml/mlruns/
+
+# Ignore application log files.
+/logs/
+
+# Ignore the data, model, and dataset folders themselves.
+# Git will only track the small *.dvc pointer files that DVC creates.
+# This is the core principle of separating code (Git) from data (DVC).
+/ml/data/
+/ml/datasets/
+/ml/models/
+/ml/raw_data/
+
+# Ignore specific large file types that might be generated, just in case
+# they appear outside the directories above.
 *.npz
 *.csv
 *.log
 *.png
 *.pth
+*.mp4
